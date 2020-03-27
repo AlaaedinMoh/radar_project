@@ -1,4 +1,4 @@
-clear all
+clear all;
 clc;
 
 %% Radar Specifications 
@@ -13,7 +13,15 @@ clc;
 %% User Defined Range and Velocity of target
 % *%TODO* :
 % define the target's initial position and velocity. Note : Velocity
-% remains contant
+% remains constant
+c0= 3e8;
+d_res= 1;
+max_r= 200;
+max_vel = 100;
+f= 77e9;
+pos = 80;      %Target position
+vel = 50;       %Target velocity
+fprintf("Range = %0.1f [m]\nVelocity = %e [m/s]\n\n", pos, vel);
  
 
 
@@ -27,6 +35,10 @@ clc;
 
 %Operating carrier frequency of Radar 
 fc= 77e9;             %carrier freq
+B= c0 / (2 * d_res);       %Bandwidth [MHz]
+Tchirp= 5.5*2*max_r/c0;    %Chirp Time
+slop= B / Tchirp;       %slop [Hz/s]
+fprintf("Bandwidth = %e\nT_sweep = %e\nslop = %e\n\n", B, Tchirp, slop);
 
                                                           
 %The number of chirps in one sequence. Its ideal to have 2^ value for the ease of running the FFT
@@ -53,7 +65,7 @@ td=zeros(1,length(t));
 
 %% Signal generation and Moving Target simulation
 % Running the radar scenario over the time. 
-
+fb = 2*(slop*pos + fc*vel)/c0;
 for i=1:length(t)         
     
     
@@ -63,35 +75,50 @@ for i=1:length(t)
     % *%TODO* :
     %For each time sample we need update the transmitted and
     %received signal. 
-    Tx(i) = 
-    Rx (i)  =
+    Tx(i) = cos(2*pi*(fc*t(i) + (slop*(t(i)^2))/2));
+    %td(i) = 2*pos/c0 + vel * t(i);
+    td(i) = 2*pos/c0;
+    Rx(i) = cos(2*pi*(fc*(t(i)-td(i)) + (slop*(t(i)-td(i))^2)/2));
     
     % *%TODO* :
     %Now by mixing the Transmit and Receive generate the beat signal
     %This is done by element wise matrix multiplication of Transmit and
     %Receiver Signal
-    Mix(i) = 
+    %Mix(i) = cos(2*pi*fb*t(i));
+    Mix(i) = Tx(i)*Rx(i);
     
 end
+subplot(3,1,1)
+plot(t, Tx);
+title("Tx");
+axis ([0 9e-6 -1.5 1.5]);
+subplot(3,1,2)
+plot(t, Rx);
+title("Rx");
+axis ([0 9e-6 -1.5 1.5]);
+subplot(3,1,3)
+plot(t, Mix);
+title("Mix");
+axis ([0 9e-6 -1.5 1.5]);
 
 %% RANGE MEASUREMENT
-
 
  % *%TODO* :
 %reshape the vector into Nr*Nd array. Nr and Nd here would also define the size of
 %Range and Doppler FFT respectively.
+Mix2d = reshape(Mix, [Nr,Nd]);
 
  % *%TODO* :
 %run the FFT on the beat signal along the range bins dimension (Nr) and
 %normalize.
-
+Mix_fft = fft(Mix2d,Nr,1);
  % *%TODO* :
 % Take the absolute value of FFT output
-
+Mix_fft = abs(Mix_fft/Nr);
  % *%TODO* :
 % Output of FFT is double sided signal, but we are interested in only one side of the spectrum.
 % Hence we throw out half of the samples.
-
+Mix_fft = Mix_fft(1:Nr/2+1);
 
 %plotting the range
 figure ('Name','Range from First FFT')
@@ -99,9 +126,13 @@ subplot(2,1,1)
 
  % *%TODO* :
  % plot FFT output 
-
- 
-axis ([0 200 0 1]);
+ plot(0:Nr/2,Mix_fft);
+ title("Range")
+axis ([0 200 0 0.4]);
+subplot(2,1,2);
+plot(t, Mix);
+title("beat frequency");
+axis ([0 3e-6 -1.2 1.2]);
 
 
 
