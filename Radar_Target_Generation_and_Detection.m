@@ -20,8 +20,10 @@ max_r= 200;
 max_vel = 100;
 f= 77e9;
 pos = 80;      %Target position
-vel = 50;       %Target velocity
-fprintf("Range = %0.1f [m]\nVelocity = %e [m/s]\n\n", pos, vel);
+vel = 20;       %Target velocity
+fprintf("Range = %0.1f [m]\nVelocity = %.2f [m/s]\n\n", pos, vel);
+isPlotDetails = false;
+isPlotResult = true;
  
 
 
@@ -34,9 +36,9 @@ fprintf("Range = %0.1f [m]\nVelocity = %e [m/s]\n\n", pos, vel);
 
 
 %Operating carrier frequency of Radar 
-fc= 77e9;             %carrier freq
-B= c0 / (2 * d_res);       %Bandwidth [MHz]
-Tchirp= 5.5*2*max_r/c0;    %Chirp Time
+fc= 77e9;             %carrier freq [Hz]
+B= c0 / (2 * d_res);       %Bandwidth [Hz]
+Tchirp= 5.5*2*max_r/c0;    %Chirp Time [s]
 slop= B / Tchirp;       %slop [Hz/s]
 fprintf("Bandwidth = %e\nT_sweep = %e\nslop = %e\n\n", B, Tchirp, slop);
 
@@ -76,8 +78,8 @@ for i=1:length(t)
     %For each time sample we need update the transmitted and
     %received signal. 
     Tx(i) = cos(2*pi*(fc*t(i) + (slop*(t(i)^2))/2));
-    %td(i) = 2*pos/c0 + vel * t(i);
-    td(i) = 2*pos/c0;
+    td(i) = 2*((pos - vel*t(i))/c0);
+    %td(i) = 2*pos/c0;
     Rx(i) = cos(2*pi*(fc*(t(i)-td(i)) + (slop*(t(i)-td(i))^2)/2));
     
     % *%TODO* :
@@ -88,18 +90,20 @@ for i=1:length(t)
     Mix(i) = Tx(i)*Rx(i);
     
 end
-subplot(3,1,1)
-plot(t, Tx);
-title("Tx");
-axis ([0 9e-6 -1.5 1.5]);
-subplot(3,1,2)
-plot(t, Rx);
-title("Rx");
-axis ([0 9e-6 -1.5 1.5]);
-subplot(3,1,3)
-plot(t, Mix);
-title("Mix");
-axis ([0 9e-6 -1.5 1.5]);
+if isPlotDetails
+    subplot(3,1,1) %#ok<UNRCH>
+    plot(t, Tx);
+    title("Tx");
+    axis ([0 9e-6 -1.5 1.5]);
+    subplot(3,1,2)
+    plot(t, Rx);
+    title("Rx");
+    axis ([0 9e-6 -1.5 1.5]);
+    subplot(3,1,3)
+    plot(t, Mix);
+    title("Mix");
+    axis ([0 9e-6 -1.5 1.5]);
+end
 
 %% RANGE MEASUREMENT
 
@@ -120,19 +124,22 @@ Mix_fft = abs(Mix_fft/Nr);
 % Hence we throw out half of the samples.
 Mix_fft = Mix_fft(1:Nr/2+1);
 
-%plotting the range
-figure ('Name','Range from First FFT')
-subplot(2,1,1)
 
- % *%TODO* :
- % plot FFT output 
- plot(0:Nr/2,Mix_fft);
- title("Range")
-axis ([0 200 0 0.4]);
-subplot(2,1,2);
-plot(t, Mix);
-title("beat frequency");
-axis ([0 3e-6 -1.2 1.2]);
+ if isPlotDetails
+     %plotting the range
+     figure ('Name','Range from First FFT'); %#ok<UNRCH>
+     subplot(2,1,1)
+
+    % *%TODO* :
+    % plot FFT output 
+     plot(0:Nr/2,Mix_fft);
+     title("Range")
+     axis ([0 200 0 0.4]);
+     subplot(2,1,2);
+     plot(t, Mix);
+     title("beat frequency");
+     axis ([0 3e-6 -1.2 1.2]);
+ end
 
 
 
@@ -163,7 +170,9 @@ RDM = 10*log10(RDM) ;
 %dimensions
 doppler_axis = linspace(-100,100,Nd);
 range_axis = linspace(-200,200,Nr/2)*((Nr/2)/400);
-figure,surf(doppler_axis,range_axis,RDM);
+if isPlotDetails
+    figure,surf(doppler_axis,range_axis,RDM);
+end
 
 %% CFAR implementation
 
@@ -171,18 +180,25 @@ figure,surf(doppler_axis,range_axis,RDM);
 
 % *%TODO* :
 %Select the number of Training Cells in both the dimensions.
-
+Tr = 6;
+Td = 4;
 % *%TODO* :
 %Select the number of Guard Cells in both dimensions around the Cell under 
 %test (CUT) for accurate estimation
+Gr = 4;
+Gd = 2;
+gridWidth = 2*(Tr + Gr) + 1;
+gridHeight = 2*(Td + Gd) + 1;
+Ng = (2*Gr + 1)*(2*Gd + 1);
+Nt = (2*Tr + 2*Gr + 1)*(2*Td + 2*Gd + 1) - Ng;
 
 % *%TODO* :
 % offset the threshold by SNR value in dB
-
+offset = 5;
 % *%TODO* :
 %Create a vector to store noise_level for each iteration on training cells
-noise_level = zeros(1,1);
-
+%noise_level = zeros(1,length(t));
+signal_cfar = zeros(size(RDM));
 
 % *%TODO* :
 %design a loop such that it slides the CUT across range doppler map by
@@ -198,9 +214,22 @@ noise_level = zeros(1,1);
 
    % Use RDM[x,y] as the matrix from the output of 2D FFT for implementing
    % CFAR
-
-
-
+for i = 1:size(RDM,1)- gridWidth/2  %iterate throw the range dimension
+    for j = 1:size(RDM,2) - gridHeight/2  %iterate throw the doppler dimension
+        if(i<gridWidth/2 || j<gridHeight/2)
+            continue;
+        end
+        subMat = RDM(i-(gridWidth - 1)/2:i+(gridWidth-1)/2 ,j-(gridHeight-1)/2:j+(gridHeight-1)/2);
+        linearValues = db2pow(subMat);
+        average = sum(sum(linearValues))/(gridWidth*gridHeight);
+        threshold = pow2db(average)+offset;
+        if(RDM(i,j)<threshold)
+            signal_cfar(i,j)=0;
+        else
+            signal_cfar(i,j)=1;
+        end
+    end
+end
 
 
 % *%TODO* :
@@ -220,8 +249,10 @@ noise_level = zeros(1,1);
 % *%TODO* :
 %display the CFAR output using the Surf function like we did for Range
 %Doppler Response output.
-figure,surf(doppler_axis,range_axis,'replace this with output');
-colorbar;
+if isPlotResult
+    figure,surf(doppler_axis,range_axis,signal_cfar);
+    colorbar;
+end
 
 
  
