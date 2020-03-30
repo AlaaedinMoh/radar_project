@@ -14,13 +14,13 @@ clc;
 % *%TODO* :
 % define the target's initial position and velocity. Note : Velocity
 % remains constant
-c0= 3e8;
-d_res= 1;
-max_r= 200;
-max_vel = 100;
-f= 77e9;
-pos = 80;      %Target position
-vel = 20;       %Target velocity
+lightSpeed= 3e8;    %speed of light [m/s]
+d_res= 1;           %distance resolution [m]
+max_r= 200;         %maximum range [m]
+max_vel = 100;      %maximum velocity [m/s]
+fc= 77e9;            %operation frequency [Hz]
+pos = 100;           %Target distance [m]
+vel = 40;           %Target velocity [m/s]
 fprintf("Range = %0.1f [m]\nVelocity = %.2f [m/s]\n\n", pos, vel);
 isPlotDetails = false;
 isPlotResult = true;
@@ -29,20 +29,19 @@ isPlotResult = true;
 
 %% FMCW Waveform Generation
 
-% *%TODO* :
+
+
+         % *%TODO* :
 %Design the FMCW waveform by giving the specs of each of its parameters.
 % Calculate the Bandwidth (B), Chirp Time (Tchirp) and Slope (slope) of the FMCW
 % chirp using the requirements above.
 
 
 %Operating carrier frequency of Radar 
-fc= 77e9;             %carrier freq [Hz]
-B= c0 / (2 * d_res);       %Bandwidth [Hz]
-Tchirp= 5.5*2*max_r/c0;    %Chirp Time [s]
-slop= B / Tchirp;       %slop [Hz/s]
-fprintf("Bandwidth = %e\nT_sweep = %e\nslop = %e\n\n", B, Tchirp, slop);
-
-                                                          
+B= lightSpeed / (2 * d_res);       %Bandwidth [Hz]
+Tchirp= 5.5*2*max_r/lightSpeed;    %Chirp Time [s]
+slop= B / Tchirp;                  %slop [Hz/s]
+fprintf("Bandwidth = %e\nT_sweep = %e\nslop = %e\n\n", B, Tchirp, slop); 
 %The number of chirps in one sequence. Its ideal to have 2^ value for the ease of running the FFT
 %for Doppler Estimation. 
 Nd=128;                   % #of doppler cells OR #of sent periods % number of chirps
@@ -60,38 +59,19 @@ Tx=zeros(1,length(t)); %transmitted signal
 Rx=zeros(1,length(t)); %received signal
 Mix = zeros(1,length(t)); %beat signal
 
-%Similar vectors for range_covered and time delay.
-r_t=zeros(1,length(t));
+%Similar vectors for time delay.
 td=zeros(1,length(t));
 
 
 %% Signal generation and Moving Target simulation
 % Running the radar scenario over the time. 
-fb = 2*(slop*pos + fc*vel)/c0;
-for i=1:length(t)         
-    
-    
-    % *%TODO* :
-    %For each time stamp update the Range of the Target for constant velocity. 
-    
-    % *%TODO* :
-    %For each time sample we need update the transmitted and
-    %received signal. 
-    Tx(i) = cos(2*pi*(fc*t(i) + (slop*(t(i)^2))/2));
-    td(i) = 2*((pos - vel*t(i))/c0);
-    %td(i) = 2*pos/c0;
-    Rx(i) = cos(2*pi*(fc*(t(i)-td(i)) + (slop*(t(i)-td(i))^2)/2));
-    
-    % *%TODO* :
-    %Now by mixing the Transmit and Receive generate the beat signal
-    %This is done by element wise matrix multiplication of Transmit and
-    %Receiver Signal
-    %Mix(i) = cos(2*pi*fb*t(i));
-    Mix(i) = Tx(i)*Rx(i);
-    
-end
+%fb = 2*(slop*pos + fc*vel)/lightSpeed;
+td = 2*((pos-t.*vel))./lightSpeed;
+Tx = cos(2*pi*(t.*fc + ((t.^2).*slop)/2));
+Rx = cos(2*pi*((t-td).*fc + ((t-td).^2).*slop./2));
+Mix = times(Tx,Rx);
 if isPlotDetails
-    subplot(3,1,1) %#ok<UNRCH>
+    subplot(3,1,1)
     plot(t, Tx);
     title("Tx");
     axis ([0 9e-6 -1.5 1.5]);
@@ -127,7 +107,7 @@ Mix_fft = Mix_fft(1:Nr/2+1);
 
  if isPlotDetails
      %plotting the range
-     figure ('Name','Range from First FFT'); %#ok<UNRCH>
+     figure ('Name','Range from First FFT');
      subplot(2,1,1)
 
     % *%TODO* :
@@ -180,21 +160,19 @@ end
 
 % *%TODO* :
 %Select the number of Training Cells in both the dimensions.
-Tr = 6;
-Td = 4;
+Tr = 8;
+Td = 8;
 % *%TODO* :
 %Select the number of Guard Cells in both dimensions around the Cell under 
 %test (CUT) for accurate estimation
-Gr = 4;
+Gr = 2;
 Gd = 2;
 gridWidth = 2*(Tr + Gr) + 1;
 gridHeight = 2*(Td + Gd) + 1;
-Ng = (2*Gr + 1)*(2*Gd + 1);
-Nt = (2*Tr + 2*Gr + 1)*(2*Td + 2*Gd + 1) - Ng;
 
 % *%TODO* :
 % offset the threshold by SNR value in dB
-offset = 5;
+offset = 7;
 % *%TODO* :
 %Create a vector to store noise_level for each iteration on training cells
 %noise_level = zeros(1,length(t));
@@ -253,7 +231,3 @@ if isPlotResult
     figure,surf(doppler_axis,range_axis,signal_cfar);
     colorbar;
 end
-
-
- 
- 
