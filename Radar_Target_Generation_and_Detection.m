@@ -22,7 +22,7 @@ fc= 77e9;            %operation frequency [Hz]
 pos = 100;           %Target distance [m]
 vel = 40;           %Target velocity [m/s]
 fprintf("Range = %0.1f [m]\nVelocity = %.2f [m/s]\n\n", pos, vel);
-isPlotDetails = false;
+isPlotDetails = true;
 isPlotResult = true;
  
 
